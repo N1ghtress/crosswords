@@ -2,11 +2,10 @@ use std::{
     collections::HashSet,
     fmt::Display,
     fs::File,
-    io::{ BufReader, prelude::* },
+    io::{ BufReader, prelude::*, self },
 };
 use rand::prelude::*;
 
-const DEFAULT_NB_WORD: u8 = 10;
 const DEFAULT_NB_TRY_POPULATE: usize = 10;
 const DEFAULT_NB_TRY_ADD_WORD: usize = 20000;
 const WORDS_FILE_PATH: &str = "./liste_mots_francais.txt";
@@ -14,8 +13,11 @@ const WORDS_FILE_PATH: &str = "./liste_mots_francais.txt";
 pub struct Crossword {
     word_max_length: u8,
     nb_word: u8,
+    letters: Vec<char>,
     words: Vec<String>,
-    revealed_words: Vec<bool>
+    found_words: Vec<u8>,
+    revealed_letters: Vec<char>
+    // observers: Vec<Observer>
 }
 
 impl Crossword {
@@ -23,8 +25,10 @@ impl Crossword {
         Crossword {
             word_max_length,
             nb_word,
+            letters: Vec::new(),
             words: Vec::new(),
-            revealed_words: vec![false; nb_word as usize]
+            found_words: Vec::new(),
+            revealed_letters: Vec::new()
         }
     }
 
@@ -36,10 +40,23 @@ impl Crossword {
         }
     }
 
+    pub fn start(&mut self) {
+        while self.found_words.len() != self.words.len() {
+            println!("{self}"); // notify vue
+            let mut buffer = String::new();
+            match io::stdin().read_line(&mut buffer) {
+                Ok(_n) => {
+                    buffer = String::from(buffer.trim().to_ascii_uppercase());
+                    self.process_input(&mut buffer);
+                },
+                Err(error) => panic!("{error}"),
+            }
+        }
+    }
+
     fn try_populate_words(&mut self) -> Vec<String> {
         let mut words: Vec<String> = Vec::new();
 
-        // Selection of a word of maximum length using all different letters
         let mut french_words = self.get_words_from_file();
         french_words.retain(|s| s.len() <= self.word_max_length as usize && s.len() >= 3);
 
@@ -48,20 +65,21 @@ impl Crossword {
         
         let mut word = french_words[word_index].clone();
         
-        while self.is_not_valid_first_word(&word.as_str()) {
+        while word.len() as u8 != self.word_max_length {
             word_index = rng.gen_range(0..french_words.len());
             word = french_words[word_index].clone();
         }
         
         words.push(word.clone());
-        let letters = word.as_bytes().into_iter().cloned().collect::<HashSet<_>>();
+        // word.as_bytes().into_iter().cloned().collect::<HashSet<u8>>();
+        self.letters = word.chars().collect::<HashSet<char>>().into_iter().collect::<Vec<char>>();
         let mut add_word_attempt: usize = 0;
 
         // Selection of word_number words of length <= maximum length and that use the same letter as word
         while (words.len() as u8) < self.nb_word && add_word_attempt < DEFAULT_NB_TRY_ADD_WORD {
             word_index = rng.gen_range(0..french_words.len());
             word = french_words[word_index].clone();
-            if self.is_valid_word(&words, &word.as_str(), &letters) {
+            if !words.contains(&word.to_string()) && self.is_composed_of(&word, &self.letters) {
                 words.push(word.clone());
             }
             add_word_attempt += 1;
@@ -83,36 +101,56 @@ impl Crossword {
         french_words_string.split("\r\n").map(|s| s.to_string()).collect()
     }
 
-    fn is_not_valid_first_word(&self, word: &str) -> bool {
-        // word.as_bytes().into_iter().cloned().collect::<HashSet<_>>().len() != self.max_length as usize
-        word.len() as u8 != self.word_max_length
-    }
-
-    fn is_valid_word(&self, words: &Vec<String>, word: &str, letters: &HashSet<u8>) -> bool {
-        !words.contains(&word.to_string())
-        && self.is_composed_of(&word, &letters)
-    }
-
-    fn is_composed_of(&self, word: &str, letters: &HashSet<u8>) -> bool {
-        for letter in word.as_bytes() {
-            if !letters.contains(letter) {
+    fn is_composed_of(&self, word: &str, letters: &Vec<char>) -> bool {
+        for letter in word.chars() {
+            if !letters.contains(&letter) {
                 return false;
             }
         }
     
         return true
     }
+
+    fn process_input(&mut self, input: &mut String) {
+        let input = input.trim().to_ascii_uppercase();
+        if input == "!SOLUTION" {
+            self.revealed_letters.append(&mut self.letters.clone());
+        }
+        if input == "!HINT" {
+            let mut rng = rand::thread_rng();
+            let letter_index = rng.gen_range(0..self.letters.len());
+            self.revealed_letters.push(self.letters.remove(letter_index));
+        }
+        if self.words.contains(&input.to_string()) {
+            let index = self.words.iter().position(|r| r == &input.to_string()).unwrap();
+            self.found_words.push(index as u8);
+        }
+    }
 }
 
 impl Display for Crossword {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("[ ")?;
-        for word in &self.words {
-            f.write_str(word.as_str())?;
-            f.write_str(" ")?;
+        let words = self.words.clone();
+        words.into_iter().enumerate().for_each(|(i, word)| {
+            if self.found_words.contains(&(i as u8)) {
+                f.write_str(&word).unwrap();
+            } else {
+                for char in word.chars() {
+                    if self.revealed_letters.contains(&char) {
+                        f.write_str(&format!("{char}")).unwrap();
+                    } else {
+                        f.write_str("_").unwrap();
+                    }
+                }
+            }
+            f.write_str(" ").unwrap();
+        });
+
+        f.write_str("\nAvailable letters: [ ").unwrap();
+        for letter in &self.letters {
+            f.write_str(&format!("{} ", *letter)).unwrap();
         }
-        f.write_str("]\n")?;
-        f.write_str(self.words.len().to_string().as_str())?;
+        f.write_str("]\n").unwrap();
         Ok(())
     }
 }
