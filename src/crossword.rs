@@ -41,7 +41,7 @@ impl Crossword {
     }
 
     pub fn start(&mut self) {
-        while self.found_words.len() != self.words.len() {
+        while self.found_words.contains(&false) {
             println!("{self}"); // notify vue
             let mut buffer = String::new();
             match io::stdin().read_line(&mut buffer) {
@@ -65,7 +65,7 @@ impl Crossword {
         
         let mut word = french_words[word_index].clone();
         
-        while word.chars().collect::<Vec<char>>().len() != self.word_max_length {
+        while word.chars().collect::<HashSet<char>>().len() != self.word_max_length {
             word_index = rng.gen_range(0..french_words.len());
             word = french_words[word_index].clone();
         }
