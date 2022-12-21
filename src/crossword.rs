@@ -8,7 +8,7 @@ use rand::prelude::*;
 
 const DEFAULT_NB_TRY_POPULATE: usize = 10;
 const DEFAULT_NB_TRY_ADD_WORD: usize = 20000;
-const WORDS_FILE_PATH: &str = "./liste_mots_francais.txt";
+const WORDS_FILE_PATH: &str = "pli07.txt";
 
 pub struct Crossword {
     word_max_length: u8,
@@ -65,7 +65,7 @@ impl Crossword {
         
         let mut word = french_words[word_index].clone();
         
-        while word.len() as u8 != self.word_max_length {
+        while word.chars().collect::<Vec<char>>().len() as u8 != self.word_max_length {
             word_index = rng.gen_range(0..french_words.len());
             word = french_words[word_index].clone();
         }
@@ -98,7 +98,7 @@ impl Crossword {
         let mut french_words_string = String::new();
         br.read_to_string(&mut french_words_string).unwrap();
         
-        french_words_string.split("\r\n").map(|s| s.to_string()).collect()
+        french_words_string.split("\n").map(|s| s.to_string()).collect()
     }
 
     fn is_composed_of(&self, word: &str, letters: &Vec<char>) -> bool {
