@@ -6,8 +6,8 @@ use std::{
 };
 use rand::prelude::*;
 
-const DEFAULT_NB_TRY_POPULATE: usize = 10;
-const DEFAULT_NB_TRY_ADD_WORD: usize = 20000;
+const POPULATE_ATTEMPS: usize = 10;
+const ADD_WORD_ATTEMPS: usize = 20000;
 const WORDS_FILE_PATH: &str = "pli07.txt";
 
 pub struct Crossword {
@@ -34,8 +34,12 @@ impl Crossword {
 
     pub fn populate_words(&mut self) {
         let mut populate_attempt: usize = 0;
-        while self.words.is_empty() && populate_attempt < DEFAULT_NB_TRY_POPULATE {
-            self.words = self.try_populate_words();
+
+        let mut french_words = self.get_words_from_file();
+        french_words.retain(|s| s.len() <= self.word_max_length && s.len() >= 3);
+
+        while self.words.is_empty() && populate_attempt < POPULATE_ATTEMPS {
+            self.try_populate_words(&french_words);
             populate_attempt += 1;
         }
     }
@@ -54,42 +58,28 @@ impl Crossword {
         }
     }
 
-    fn try_populate_words(&mut self) -> Vec<String> {
-        let mut words: Vec<String> = Vec::new();
-
-        let mut french_words = self.get_words_from_file();
-        french_words.retain(|s| s.len() <= self.word_max_length && s.len() >= 3);
+    fn try_populate_words(&mut self, dict: &Vec<String>) {
+        self.words = Vec::new();
 
         let mut rng = rand::thread_rng();
-        let mut word_index = rng.gen_range(0..french_words.len());
+        let mut index = rng.gen_range(0..dict.len());
         
-        let mut word = french_words[word_index].clone();
-        
-        while word.chars().collect::<HashSet<char>>().len() != self.word_max_length {
-            word_index = rng.gen_range(0..french_words.len());
-            word = french_words[word_index].clone();
+        while dict[index].chars().collect::<HashSet<_>>().len() != self.word_max_length {
+            index = rng.gen_range(0..dict.len());
         }
         
-        words.push(word.clone());
-        // word.as_bytes().into_iter().cloned().collect::<HashSet<u8>>();
-        self.letters = word.chars().collect::<HashSet<char>>().into_iter().collect::<Vec<char>>();
-        let mut add_word_attempt: usize = 0;
-
-        // Selection of word_number words of length <= maximum length and that use the same letter as word
-        while words.len() < self.nb_word && add_word_attempt < DEFAULT_NB_TRY_ADD_WORD {
-            word_index = rng.gen_range(0..french_words.len());
-            word = french_words[word_index].clone();
-            if !words.contains(&word.to_string()) && self.is_composed_of(&word, &self.letters) {
-                words.push(word.clone());
+        self.words.push(dict[index].clone());
+        self.letters = dict[index].chars().collect::<HashSet<_>>().into_iter().collect();
+        
+        let mut attempts: usize = 0;
+        while self.words.len() < self.nb_word && attempts < ADD_WORD_ATTEMPS {
+            index = rng.gen_range(0..dict.len());
+            let word = dict[index].clone();
+            if !self.words.contains(&word.to_string()) && self.is_composed_of(&word, &self.letters) {
+                self.words.push(word.clone());
             }
-            add_word_attempt += 1;
+            attempts += 1;
         }
-
-        if words.len() < self.nb_word {
-            words = Vec::new()
-        }
-
-        words
     }  
 
     fn get_words_from_file(&self) -> Vec<String> {
@@ -104,11 +94,11 @@ impl Crossword {
     fn is_composed_of(&self, word: &str, letters: &Vec<char>) -> bool {
         for letter in word.chars() {
             if !letters.contains(&letter) {
-                return false;
+                return false
             }
         }
     
-        return true
+        true
     }
 
     fn process_input(&mut self, input: &mut String) {
